@@ -5,8 +5,8 @@ steps:
       - 'cp'
       - '-r'
       - '-p'
-      - 'releases'
-      - 'gs://uhvwcgv0ierpc2nvdmvyesbqcmv2awv3cg'
+      - 'releases/**/release.json'
+      - 'gs://uhvwcgv0ierpc2nvdmvyesbqcmv2awv3cg/releases'
     waitFor: ['-']
 
   - name: 'gcr.io/cloud-builders/gsutil'
