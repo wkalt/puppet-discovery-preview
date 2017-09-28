@@ -1,5 +1,6 @@
 steps:
   - name: 'gcr.io/cloud-builders/gsutil'
+    id: 'cp'
     args:
       - 'cp'
       - '-r'
@@ -7,17 +8,20 @@ steps:
       - 'releases'
       - 'gs://uhvwcgv0ierpc2nvdmvyesbqcmv2awv3cg'
     waitFor: ['-']
-    id: 'cp'
 
   - name: 'gcr.io/cloud-builders/gsutil'
+    id: 'setmeta'
     args:
       - 'setmeta'
-      - '-h "content-type:application/json"'
-      - '-h "cache-control:no-cache, max-age=0, no-transform"'
+      - '-h'
+      - '"content-type:application/json"'
+      - '-h'
+      - '"cache-control:no-cache, max-age=0, no-transform"'
       - 'gs://uhvwcgv0ierpc2nvdmvyesbqcmv2awv3cg/**/release.json'
     waitFor: ['cp']
 
   - name: 'gcr.io/cloud-builders/gsutil'
+    id: 'acl'
     args:
       - 'acl'
       - 'ch'
