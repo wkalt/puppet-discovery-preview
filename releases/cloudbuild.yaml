@@ -1,0 +1,11 @@
+steps:
+  - name: 'gcr.io/cloud-builders/gsutil'
+    args: ['cp', '-r', '-p', 'releases', 'gs://uhvwcgv0ierpc2nvdmvyesbqcmv2awv3cg']
+    waitFor: ['-']
+    id: 'cp'
+  - name: 'gcr.io/cloud-builders/gsutil'
+    args: ['setmeta', '-h', '"Content-Type:application/json"', '-h', '"Cache-Control:no-cache, max-age=0, no-transform"', 'gs://uhvwcgv0ierpc2nvdmvyesbqcmv2awv3cg/**/release.json']
+    waitFor: ['cp']
+  - name: 'gcr.io/cloud-builders/gsutil'
+    args: ['acl', 'ch', '-u', 'AllUsers:R', 'gs://uhvwcgv0ierpc2nvdmvyesbqcmv2awv3cg/**/release.json']
+    waitFor: ['cp']
