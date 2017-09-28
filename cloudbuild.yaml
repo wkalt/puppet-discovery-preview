@@ -28,4 +28,4 @@ steps:
       - '-u'
       - 'AllUsers:R'
       - 'gs://uhvwcgv0ierpc2nvdmvyesbqcmv2awv3cg/**/release.json'
-    waitFor: ['cp']
+    waitFor: ['setmeta']
