@@ -66,6 +66,7 @@ function minikube-logs() {
     _install_path=$(install-path)
     _pod=$1
 
+    KUBECONFIG="${_install_path}/${KUBECONFIG_FILE}" \
     "${_install_path}"/kubetail \
                       --context puppet-discovery-minikube \
                       "${_pod}"
@@ -591,7 +592,6 @@ function puppet-discovery-status() {
            [[ $rep =~ ^-?[1-9]+$ ]] && #verify replica count is 1+
            [[ $rrep =~ ^-?[1-9]+$ ]] && #verify readyReplica count is 1+
            [[ $crep =~ ^-?[1-9]+$ ]] && #verify currentReplica count is 1+
-           [[ "${crev}" == "${urev}" ]] && #verify currentRevision = updateRevision count
            [[ ${rep} -eq ${rrep} ]] && #verify replica = readyReplica
            [[ ${rep} -eq ${crep} ]]; #verify replica = currentReplica
         then
