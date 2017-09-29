@@ -6,8 +6,14 @@ MINIKUBE_KUBERNETES_VERSION="v1.7.5"
 KUBECTL_VERSION=v1.7.6
 KUBETAIL_VERSION=1.4.1
 PUPPET_DISCOVERY_VERSION=latest
+KUBECONFIG_FILE=.kubeconfig
 TIMESTAMP=$(date +%s)
 HEAP_APP_ID="11" # TODO Replace with real App ID for tracking
+
+# Add overrides for development environment
+if [ -f pd-dev.sh ]; then
+    source pd-dev.sh
+fi
 
 function install-path() {
     local _install_path=${INSTALL_PATH:-$HOME/opt/puppet/discovery}
@@ -40,7 +46,9 @@ function minikube-cmd() {
     local _install_path=
     _install_path=$(install-path)
 
-    MINIKUBE_HOME="${_install_path}" "${_install_path}"/minikube \
+    KUBECONFIG="${_install_path}/${KUBECONFIG_FILE}" \
+    MINIKUBE_HOME="${_install_path}" \
+    "${_install_path}"/minikube \
                    --profile puppet-discovery-minikube \
                     "${@}"
 }
@@ -68,6 +76,7 @@ function kubectl-cmd() {
     _install_path="$(install-path)"
 
     "${_install_path}"/kubectl \
+                    --kubeconfig="${_install_path}/${KUBECONFIG_FILE}" \
                     --context=puppet-discovery-minikube \
                     "${@}"
 }
@@ -107,8 +116,12 @@ function binary-exists() {
     return $_r
 }
 
+function skip-virtualbox-install() {
+    [[ ! -z $PUPPET_DISCOVERY_SKIP_VBOX ]]
+}
+
 function ensure-virtualbox() {
-    if ! binary-exists VBoxManage && ! running_in_ci;
+    if ! binary-exists VBoxManage && ! skip-virtualbox-install;
     then
         echo "VirtualBox is currently missing from your system."
         echo "Visit https://www.virtualbox.org/wiki/Downloads and"
@@ -167,6 +180,18 @@ function ensure-kubectl() {
     fi
 }
 
+function ensure-kubeconfig {
+  local _install_path=
+  _install_path="$(install-path)"
+
+  echo "Generating kubeconfig..."
+  if [ ! -f "${_install_path}/${KUBECONFIG_FILE}" ];
+  then
+      kubectl-cmd config set-context puppet > /dev/null 2>&1
+      kubectl-cmd config delete-context puppet > /dev/null 2>&1
+  fi
+}
+
 function ensure-kubetail() {
     local _install_path=
     local _kubetail_url=
@@ -185,14 +210,10 @@ function ensure-puppet-discovery-operator() {
     echo "Downloading Puppet Discovery operator..."
 }
 
-function running_in_ci() {
-    [[ !  -z  $CI ]]
-}
-
 function minikube-start() {
-    if running_in_ci;
+    if [[ ! -z "${MINIKUBE_VM_DRIVER}" ]];
     then
-        vm_driver="--vm-driver=none"
+        vm_driver="--vm-driver=${MINIKUBE_VM_DRIVER}"
     fi
 
     echo "Starting minikube..."
@@ -200,7 +221,6 @@ function minikube-start() {
              --kubernetes-version $MINIKUBE_KUBERNETES_VERSION \
              --cpus "$(minikube-cpus)" \
              --memory "$(minikube-memory)" \
-             --keep-context \
              $vm_driver
 
     printf "Waiting for minikube to finish starting..."
@@ -212,7 +232,7 @@ function minikube-start() {
 
 function minikube-cpus() {
     local _cpus=
-    _cpus=${MINIKUBE_CPUS:-2}
+    _cpus=${MINIKUBE_CPUS:-1}
 
     echo "$_cpus"
 }
@@ -238,6 +258,10 @@ function minikube-status() {
     minikube-cmd status --format "{{.MinikubeStatus}}"
 }
 
+function puppet-it-managed() {
+    [ -d /opt/puppet-it ] && echo "true" || echo "false"
+}
+
 function post-measurement() {
     local _action=
     local _payload=
@@ -251,15 +275,15 @@ function post-measurement() {
     "timestamp": "${TIMESTAMP}",
     "properties": {
         "category": "cli",
-        "platform": "$(os-str)"
+        "platform": "$(os-str)",
+        "puppet-employee": "$(puppet-it-managed)"
     }
 }
 EOF
 )
 
     # Do not send analytics if DISABLE_ANALYTICS flag is set
-    # or if in CI w/ TravisCI
-    if [ -z "${DISABLE_ANALYTICS+x}" ] && [[ -z "${TRAVIS+x}" ]]; then
+    if [ -z "${DISABLE_ANALYTICS+x}" ]; then
         curl \
             -X POST \
             -H "Content-Type: application/json" \
@@ -269,13 +293,25 @@ EOF
 
 }
 
+function generate-uuid() {
+    if [[ -a /proc/sys/kernel/random/uuid ]]; then
+        cat /proc/sys/kernel/random/uuid
+    elif binary-exists uuidgen; then
+        uuidgen
+    elif binary-exists python; then
+        python  -c 'import uuid; print uuid.uuid1()'
+    elif binary-exists od && binary-exists awk; then
+        od -x /dev/urandom | head -1 | awk '{OFS="-"; print $2$3,$4,$5,$6,$7$8$9}'
+    fi
+}
+
 function unique-system-id() {
     local _uuid=
     _uuid="$(install-path)/.uuid"
 
     if [[ ! -f "${_uuid}" ]];
     then
-        uuidgen | tee "${_uuid}"
+        generate-uuid | tee "${_uuid}"
     fi
 
     cat "${_uuid}"
@@ -324,6 +360,8 @@ function spinner() {
     local delay=0.75
     local spinstr="|/-\\"
 
+    trap 'kill $pid' INT
+
     while ps a | awk '{print $1}' | grep -q "${pid}"; do
         local temp=${spinstr#?}
         printf " [%c]  " "$spinstr"
@@ -332,6 +370,8 @@ function spinner() {
         printf "\b\b\b\b\b\b"
     done
     printf "    \b\b\b\b"
+
+    trap - INT
 }
 
 function cmd-deploy() {
@@ -386,13 +426,31 @@ function cmd-install() {
 
     ensure-virtualbox
     ensure-install-directory
-    ensure-minikube
     ensure-kubectl
+    ensure-kubeconfig
+    ensure-minikube
     ensure-kubetail
     ensure-puppet-discovery-operator
 
     cmd-start
-    cmd-deploy
+
+    if puppet-discovery-private; then
+        warning-and-google-auth
+    fi
+
+    if [[ -z ${RUN_FULL_DEPLOY} ]]; then
+      if [[ ${REQUIRE_AUTH} == true ]]; then
+        echo
+        read -r -p "Press [Enter] key to load gcloud service account into minikube..."
+        echo
+        run-make-mini-auth-gcr
+      fi
+
+      echo
+      read -r -p "Press [Enter] key to start installation..."
+      echo
+      cmd-deploy
+    fi
 }
 
 function cmd-uninstall() {
@@ -488,6 +546,7 @@ function cmd-help() {
     echo "  info      - List all puppet-discovery service endpoints"
     echo "  logs      - Tail output logs from puppet-discovery"
     echo "  open      - Open puppet-discovery dashboard inside browser"
+    echo "  deploy    - Deploy puppet-discovery services"
     echo "  version   - Query the control-plane for the installed version"
     echo "  mayday    - Generate a troubleshooting archive to send to Puppet"
     echo "  help      - This help screen"
@@ -577,7 +636,17 @@ function puppet-discovery-info() {
 
     echo "---------------------------------------------"
     echo "open ${_miniurl}/ to access the ui."
+    echo "open ${_miniurl}/pdp/query for query."
+    echo "Open ${_miniurl}/pdp/ingest for ingest."
+    echo "Open ${_miniurl}/cmd/graphiql to hit the GraphiQL service for commands."
+    echo "Open ${_miniurl}/cmd/graphql for the commands graphql api."
+    echo "Open ${_miniurl}/ws for the cmd-controller web sockets api."
+    echo "Open ${_miniurl}/command for the cmd-controller command api."
     echo "---------------------------------------------"
+}
+
+function puppet-discovery-private() {
+    [[ ! -z $PUPPET_DISCOVERY_PRIVATE ]]
 }
 
 function puppet-discovery() {
@@ -603,9 +672,9 @@ function puppet-discovery() {
 }
 
 # Main Entry Point
-if [[ $EUID -eq 0 && "$CI" != "true" ]]; then
+if [[ $EUID -eq 0 && "$ALLOW_ROOT" != "true" ]]; then
     echo "**************************************************************"
-    echo "This script must not be run as root, otherwise some minikube"
+    echo "This script must not be run as root, or else some minikube"
     echo "files in your home directory may become owned by root."
     echo "**************************************************************"
     echo ""
