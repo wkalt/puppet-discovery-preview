@@ -375,6 +375,13 @@ function spinner() {
     trap - INT
 }
 
+function getting-started() {
+    cmd-open
+    echo
+    echo "To get started with Puppet Discovery, run:"
+    echo "./puppet-discovey.sh open"
+}
+
 function cmd-deploy() {
     echo "Deploying Puppet Discovery..."
 
@@ -385,6 +392,8 @@ function cmd-deploy() {
     printf "Waiting for Puppet Discovery to finish starting..."
     (block-on puppet-discovery-status) &
     spinner $!
+
+    kubectl-cmd get pd > /dev/null 2>&1; # hydrate model alias for future queries
 
     echo ""
     cmd-status
@@ -451,6 +460,7 @@ function cmd-install() {
       read -r -p "Press [Enter] key to start installation..."
       echo
       cmd-deploy
+      getting-started
     fi
 }
 
@@ -557,11 +567,6 @@ function cmd-help() {
 
 function puppet-discovery-status() {
     local pod=
-    local crev=
-    local urev=
-    local rep=
-    local rrep=
-    local crep=
     local _exit=
     _exit=0
 
@@ -576,32 +581,6 @@ function puppet-discovery-status() {
             printf "✗\n"
         fi
     done
-
-    for pod in agent elasticsearch;
-    do
-        # workaround for checking statefulset rollout status until k8s 1.8
-        crev=$(kubectl-cmd get sts -o jsonpath='{.items[?(@.metadata.name=="'${pod}'")].status.currentRevision}')
-        urev=$(kubectl-cmd get sts -o jsonpath='{.items[?(@.metadata.name=="'${pod}'")].status.updateRevision}')
-        rep=$(kubectl-cmd get sts -o jsonpath='{.items[?(@.metadata.name=="'${pod}'")].status.replicas}')
-        rrep=$(kubectl-cmd get sts -o jsonpath='{.items[?(@.metadata.name=="'${pod}'")].status.readyReplicas}')
-        crep=$(kubectl-cmd get sts -o jsonpath='{.items[?(@.metadata.name=="'${pod}'")].status.currentReplicas}')
-
-        printf "  %s: " "${pod}"
-        if [[ ! -z $crev ]] && # verify currentRevision is set
-           [[ ! -z $urev ]] && # verify updateRevision is set
-           [[ $rep =~ ^-?[1-9]+$ ]] && #verify replica count is 1+
-           [[ $rrep =~ ^-?[1-9]+$ ]] && #verify readyReplica count is 1+
-           [[ $crep =~ ^-?[1-9]+$ ]] && #verify currentReplica count is 1+
-           [[ ${rep} -eq ${rrep} ]] && #verify replica = readyReplica
-           [[ ${rep} -eq ${crep} ]]; #verify replica = currentReplica
-        then
-            printf "✓\n"
-        else
-            _exit=$(( _exit + 1 ))
-            printf "✗\n"
-        fi
-    done
-
 
     if [[ _exit -gt 0 ]]; then return 1; else return 0; fi
 }
