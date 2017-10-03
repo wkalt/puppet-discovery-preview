@@ -1,0 +1,27 @@
+steps:
+  - name: gcr.io/cloud-builders/docker
+    id: build-tagger
+    waitFor: ['-']
+    args:
+      - build
+      - "-t"
+      - gcr.io/$PROJECT_ID/cloud-builders/puppet-discovery-tagger
+      - "-f"
+      - build/tagger.Dockerfile
+      - "."
+
+  # staging
+  - name: "gcr.io/$PROJECT_ID/cloud-builders/puppet-discovery-tagger"
+    id: tag-staging
+    waitFor: build-tagger
+    args:
+      - 'staging'
+      - $PROJECT_ID
+
+  # preview
+  - name: "gcr.io/$PROJECT_ID/cloud-builders/puppet-discovery-tagger"
+    id: tag-preview
+    waitFor: build-tagger
+    args:
+      - 'preview'
+      - $PROJECT_ID
