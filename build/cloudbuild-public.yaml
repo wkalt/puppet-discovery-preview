@@ -13,7 +13,7 @@ steps:
   # staging
   - name: "gcr.io/$PROJECT_ID/cloud-builders/puppet-discovery-tagger"
     id: tag-staging
-    waitFor: build-tagger
+    waitFor: ['build-tagger']
     args:
       - 'staging'
       - $PROJECT_ID
@@ -21,7 +21,7 @@ steps:
   # preview
   - name: "gcr.io/$PROJECT_ID/cloud-builders/puppet-discovery-tagger"
     id: tag-preview
-    waitFor: build-tagger
+    waitFor: ['build-tagger']
     args:
       - 'preview'
       - $PROJECT_ID

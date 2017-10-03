@@ -22,12 +22,12 @@ steps:
   # demo
   - name: "gcr.io/$PROJECT_ID/cloud-builders/puppet-discovery-pusher"
     id: push-demo
-    waitFor: build-pusher
+    waitFor: ['build-pusher']
     args:
       - 'demo'
   - name: "gcr.io/$PROJECT_ID/cloud-builders/puppet-discovery-tagger"
     id: tag-demo
-    waitFor: build-tagger
+    waitFor: ['build-tagger']
     args:
       - 'demo'
       - $PROJECT_ID
@@ -35,13 +35,13 @@ steps:
   # staging
   - name: "gcr.io/$PROJECT_ID/cloud-builders/puppet-discovery-pusher"
     id: push-staging
-    waitFor: build-pusher
+    waitFor: ['build-pusher']
     args:
       - 'staging'
 
   # preview
   - name: "gcr.io/$PROJECT_ID/cloud-builders/puppet-discovery-pusher"
     id: push-preview
-    waitFor: build-pusher
+    waitFor: ['build-pusher']
     args:
       - 'preview'
