@@ -5,10 +5,13 @@ MINIKUBE_VERSION=0.22.2
 MINIKUBE_KUBERNETES_VERSION="v1.7.5"
 KUBECTL_VERSION=v1.7.6
 KUBETAIL_VERSION=1.4.1
-PUPPET_DISCOVERY_VERSION=latest
 KUBECONFIG_FILE=.kubeconfig
 TIMESTAMP=$(date +%s)
 HEAP_APP_ID="11" # TODO Replace with real App ID for tracking
+
+function debug-mode() {
+    [[ -n $DEBUG ]]
+}
 
 # Add overrides for development environment
 if [ -f pd-dev.sh ]; then
@@ -46,11 +49,23 @@ function minikube-cmd() {
     local _install_path=
     _install_path=$(install-path)
 
-    KUBECONFIG="${_install_path}/${KUBECONFIG_FILE}" \
-    MINIKUBE_HOME="${_install_path}" \
-    "${_install_path}"/minikube \
-                   --profile puppet-discovery-minikube \
-                    "${@}"
+    if debug-mode; then
+      KUBECONFIG="${_install_path}/${KUBECONFIG_FILE}" \
+        MINIKUBE_HOME="${_install_path}" \
+        "${_install_path}"/minikube \
+        --profile puppet-discovery-minikube \
+        --loglevel 0 \
+        --logtostderr \
+        --stderrthreshold 0 \
+        --v 0 \
+        "${@}"
+    else
+      KUBECONFIG="${_install_path}/${KUBECONFIG_FILE}" \
+        MINIKUBE_HOME="${_install_path}" \
+        "${_install_path}"/minikube \
+        --profile puppet-discovery-minikube \
+        "${@}"
+    fi
 }
 
 function minikube-url() {
@@ -207,8 +222,26 @@ function ensure-kubetail() {
     fi
 }
 
-function ensure-puppet-discovery-operator() {
-    echo "Downloading Puppet Discovery operator..."
+function configure-minikube() {
+    local _install_path=
+    local _minikube_config_dir=
+    _install_path=$(install-path)
+
+    _minikube_config_dir=${_install_path}/.minikube/config
+
+    if [ ! -d "${_minikube_config_dir}" ]; then
+      echo "Generating minikube config directory"
+      mkdir -p "${_minikube_config_dir}"
+    fi
+
+    echo "Setting up minikube config..."
+
+    cat > "${_minikube_config_dir}"/config.json <<EOF
+{
+  "WantKubectlDownloadMsg": false,
+  "default-storageclass": false
+}
+EOF
 }
 
 function minikube-start() {
@@ -218,11 +251,15 @@ function minikube-start() {
     fi
 
     echo "Starting minikube..."
-    minikube-cmd start \
-             --kubernetes-version $MINIKUBE_KUBERNETES_VERSION \
-             --cpus "$(minikube-cpus)" \
-             --memory "$(minikube-memory)" \
-             $vm_driver
+    if ! minikube-cmd start \
+                  --kubernetes-version $MINIKUBE_KUBERNETES_VERSION \
+                  --cpus "$(minikube-cpus)" \
+                  --memory "$(minikube-memory)" \
+                  $vm_driver
+    then
+        echo "ERROR: minikube failed to start, aborting install"
+        exit 1
+    fi
 
     printf "Waiting for minikube to finish starting..."
     (block-on kubectl-cmd get nodes | grep Ready) &
@@ -314,7 +351,6 @@ function unique-system-id() {
     then
         generate-uuid | tee "${_uuid}"
     fi
-
     cat "${_uuid}"
 }
 
@@ -384,10 +420,16 @@ function getting-started() {
 
 function cmd-deploy() {
     echo "Deploying Puppet Discovery..."
+    echo "Depending on your system resources, this may take a couple of minutes."
+    echo
 
-    kubectl-cmd run \
-                operator \
-                --image=gcr.io/puppet-discovery/puppet-discovery-operator:${PUPPET_DISCOVERY_VERSION}
+    if [ -n "$(type -t deploy-operator)" ] && [ "$(type -t deploy-operator)" = function ]; then
+      deploy-operator
+    else
+      kubectl-cmd run \
+                  operator \
+                  --image=gcr.io/puppet-discovery/puppet-discovery-operator:latest
+    fi
 
     printf "Waiting for Puppet Discovery to finish starting..."
     (block-on puppet-discovery-status) &
@@ -396,7 +438,7 @@ function cmd-deploy() {
     kubectl-cmd get pd > /dev/null 2>&1; # hydrate model alias for future queries
 
     echo ""
-    cmd-status
+    puppet-discovery-status
 }
 
 function cmd-version() {
@@ -432,17 +474,23 @@ function cmd-install() {
 
     echo "Installing Puppet Discovery..."
 
+    ensure-install-directory
+
     post-measurement "cmd-install"
 
     ensure-virtualbox
-    ensure-install-directory
     ensure-kubectl
     ensure-kubeconfig
     ensure-minikube
     ensure-kubetail
-    ensure-puppet-discovery-operator
+
+    configure-minikube
 
     cmd-start
+
+    if [ -n "$(type -t select-channel)" ] && [ "$(type -t select-channel)" = function ]; then
+      select-channel
+    fi
 
     if puppet-discovery-private; then
         warning-and-google-auth
@@ -453,14 +501,15 @@ function cmd-install() {
         echo
         read -r -p "Press [Enter] key to load gcloud service account into minikube..."
         echo
-        run-make-mini-auth-gcr
+        mount-gcr-auth
       fi
 
       echo
       read -r -p "Press [Enter] key to start installation..."
       echo
-      cmd-deploy
-      getting-started
+      if cmd-deploy; then
+        getting-started
+      fi
     fi
 }
 
@@ -491,6 +540,7 @@ function cmd-status() {
     echo "Checking Puppet Discovery status..."
 
     puppet-discovery-status
+    echo ""
 }
 
 function cmd-info() {
@@ -560,6 +610,9 @@ function cmd-help() {
     echo "  deploy    - Deploy puppet-discovery services"
     echo "  version   - Query the control-plane for the installed version"
     echo "  mayday    - Generate a troubleshooting archive to send to Puppet"
+    if [ -n "$(type -t cmd-channel)" ] && [ "$(type -t cmd-channel)" = function ]; then
+      echo "  channel   - Switch to a different release channel for puppet-discovery"
+    fi
     echo "  help      - This help screen"
 
     exit 1
@@ -573,7 +626,8 @@ function puppet-discovery-status() {
     for pod in cmd-controller ingest ingress-controller mosquitto operator query ui;
     do
         printf "  %s: " "${pod}"
-        if kubectl-cmd rollout status deploy/"$pod" > /dev/null 2>&1;
+
+        if kubectl-cmd rollout status deploy/"$pod" --watch=false 2> /dev/null | grep -q "successfully rolled out";
         then
             printf "✓\n"
         else
@@ -586,10 +640,15 @@ function puppet-discovery-status() {
 }
 
 function block-on() {
-    until "$@" > /dev/null 2>&1;
+    local _max_retries=120 # this effectively gives us a 10 minute timeout
+    until "$@" > /dev/null 2>&1 || [ $_max_retries -eq 1 ];
     do
+        _max_retries=$(( _max_retries - 1 ))
         sleep 5
     done
+    if [ $_max_retries -eq 1 ]; then
+      echo "We timed out waiting for the operation to finish. Please check the logs. This can be accomplished via the 'logs' command. "
+    fi
 }
 
 function puppet-discovery-version() {
@@ -598,7 +657,7 @@ function puppet-discovery-version() {
 
     if kubectl-cmd get pd > /dev/null;
     then
-        _version=$(kubectl-cmd get pd -o yaml | grep versionTag | awk '{print $2}')
+        _version="$(kubectl-cmd get pd -o jsonpath='{..spec.releaseChannel}')"@"$(kubectl-cmd get pd -o jsonpath='{..spec.versionTag}')"
     else
         _version="Unknown version. Check status"
     fi
@@ -615,7 +674,7 @@ function puppet-discovery-info() {
 
     echo "---------------------------------------------"
     echo "open ${_miniurl}/ to access the ui."
-    echo "open ${_miniurl}/pdp/query for query."
+    echo "open ${_miniurl}/pdp/query/index.html for query."
     echo "Open ${_miniurl}/pdp/ingest for ingest."
     echo "Open ${_miniurl}/cmd/graphiql to hit the GraphiQL service for commands."
     echo "Open ${_miniurl}/cmd/graphql for the commands graphql api."
@@ -625,7 +684,7 @@ function puppet-discovery-info() {
 }
 
 function puppet-discovery-private() {
-    [[ ! -z $PUPPET_DISCOVERY_PRIVATE ]]
+    [[ ! -z $PUPPET_DISCOVERY_PRIVATE ]] && [[ ${PUPPET_DISCOVERY_PRIVATE} == true ]]
 }
 
 function puppet-discovery() {
