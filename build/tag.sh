@@ -9,6 +9,7 @@ _repo="gcr.io/$PROJECT_ID"
 _version_tagged_image=$_repo/puppet-discovery-operator:$_new_version
 
 set -x
+set -e
 docker pull $_version_tagged_image
 docker tag $_version_tagged_image $_repo/puppet-discovery-operator:$RELEASE_CHANNEL
 docker push $_repo/puppet-discovery-operator:$RELEASE_CHANNEL
