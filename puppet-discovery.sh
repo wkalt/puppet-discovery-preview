@@ -6,8 +6,8 @@ MINIKUBE_KUBERNETES_VERSION="v1.7.5"
 KUBECTL_VERSION=v1.7.6
 KUBETAIL_VERSION=1.4.1
 KUBECONFIG_FILE=.kubeconfig
-TIMESTAMP=$(date +%s)
-HEAP_APP_ID="11" # TODO Replace with real App ID for tracking
+TIMESTAMP=$(date +%Y-%m-%dT%H:%M:%S%z)
+HEAP_APP_ID="2653197683"
 
 function debug-mode() {
     [[ -n $DEBUG ]]
@@ -113,9 +113,9 @@ function download-file() {
     local _url=$1
     local _destination=$2
 
-    if ! curl -Lo "${_destination}" "${_url}"; then
+    if ! curl --progress-bar -Lo "${_destination}" "${_url}"; then
         echo "curl failed to download ${_url}, retrying using wget"
-        wget -O "${_destination}" "${_url}"
+        wget -q --show-progress -O "${_destination}" "${_url}"
     fi
     if [[ ! -a "$_destination" ]]; then
         echo "ERROR: file $_destination was not created successfully, aborting install"
@@ -303,12 +303,14 @@ function puppet-it-managed() {
 function post-measurement() {
     local _action=
     local _payload=
+    local _identity=
     _action="${*}"
+    _identity=$(unique-system-id)
 
     _payload=$(cat <<EOF
 {
     "app_id": "${HEAP_APP_ID}",
-    "identity": "$(unique-system-id)",
+    "identity": "${_identity}",
     "event": "${_action}",
     "timestamp": "${TIMESTAMP}",
     "properties": {
@@ -321,9 +323,10 @@ EOF
 )
 
     # Do not send analytics if DISABLE_ANALYTICS flag is set
-    if [ -z "${DISABLE_ANALYTICS+x}" ]; then
+    if [[ -z "${DISABLE_ANALYTICS}" ]]; then
         curl \
             -X POST \
+            -H "Accept: application/json" \
             -H "Content-Type: application/json" \
             -d "${_payload}" \
             https://heapanalytics.com/api/track > /dev/null 2>&1 &
@@ -349,7 +352,7 @@ function unique-system-id() {
 
     if [[ ! -f "${_uuid}" ]];
     then
-        generate-uuid | tee "${_uuid}"
+        generate-uuid | tee "${_uuid}" > /dev/null
     fi
     cat "${_uuid}"
 }
@@ -607,7 +610,6 @@ function cmd-help() {
     echo "  info      - List all puppet-discovery service endpoints"
     echo "  logs      - Tail output logs from puppet-discovery"
     echo "  open      - Open puppet-discovery dashboard inside browser"
-    echo "  deploy    - Deploy puppet-discovery services"
     echo "  version   - Query the control-plane for the installed version"
     echo "  mayday    - Generate a troubleshooting archive to send to Puppet"
     if [ -n "$(type -t cmd-channel)" ] && [ "$(type -t cmd-channel)" = function ]; then
