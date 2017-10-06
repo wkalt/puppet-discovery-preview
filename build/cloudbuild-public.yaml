@@ -9,11 +9,29 @@ steps:
       - "-f"
       - build/tagger.Dockerfile
       - "."
+  - name: gcr.io/cloud-builders/docker
+    id: build-public
+    waitFor: ['-']
+    args:
+      - build
+      - "-t"
+      - gcr.io/$PROJECT_ID/cloud-builders/puppet-discovery-public
+      - "-f"
+      - build/public.Dockerfile
+      - "."
 
   # staging
+  - name: "gcr.io/$PROJECT_ID/cloud-builders/puppet-discovery-public"
+    id: promote-public-staging
+    waitFor: ['build-tagger', 'build-public']
+    args:
+      - 'staging'
+      - $PROJECT_ID
+      - 'puppet-dig'
+
   - name: "gcr.io/$PROJECT_ID/cloud-builders/puppet-discovery-tagger"
     id: tag-staging
-    waitFor: ['build-tagger']
+    waitFor: ['build-tagger', 'build-public', 'promote-public-staging']
     args:
       - 'staging'
       - $PROJECT_ID
