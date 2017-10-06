@@ -1,10 +1,9 @@
 #!/bin/bash
 RELEASE_CHANNEL=$1
-PROJECT_ID=$2
-SOURCE_ID=$3
+SOURCE_ID=$2
+TARGET_ID=$3
 
-_release_source="releases/$RELEASE_CHANNEL/release.json"
-_new_version=$(cat $_release_source | jq -r '.resources[] | select(.resource == "operator") | .version')
+source /release-helper.sh "$@"
 
 # pull release from puppet-dig
 _source_repo="gcr.io/$SOURCE_ID"
@@ -21,7 +20,7 @@ docker pull $_source_repo/pdp-query:$_new_version
 docker pull $_source_repo/static-ui:$_new_version
 
 # move release tag to public
-_destination_repo="gcr.io/$PROJECT_ID"
+_destination_repo="gcr.io/$TARGET_ID"
 
 docker tag $_source_repo/cloud-discovery-controller:$_new_version $_destination_repo/cloud-discovery-controller:$_new_version
 docker tag $_source_repo/cloud-discovery-agent:$_new_version $_destination_repo/cloud-discovery-agent:$_new_version

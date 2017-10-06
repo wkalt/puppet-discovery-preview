@@ -1,5 +1,16 @@
 steps:
   - name: gcr.io/cloud-builders/docker
+    id: build-pusher
+    waitFor: ['-']
+    args:
+      - build
+      - "-t"
+      - gcr.io/$PROJECT_ID/cloud-builders/puppet-discovery-pusher
+      - "-f"
+      - build/pusher.Dockerfile
+      - "."
+
+  - name: gcr.io/cloud-builders/docker
     id: build-tagger
     waitFor: ['-']
     args:
@@ -9,6 +20,7 @@ steps:
       - "-f"
       - build/tagger.Dockerfile
       - "."
+
   - name: gcr.io/cloud-builders/docker
     id: build-public
     waitFor: ['-']
@@ -20,21 +32,41 @@ steps:
       - build/public.Dockerfile
       - "."
 
+  # demo
+  - name: "gcr.io/$PROJECT_ID/cloud-builders/puppet-discovery-tagger"
+    id: tag-demo
+    waitFor: ['build-tagger']
+    args:
+      - 'demo'
+      - 'puppet-dig'
+
+  - name: "gcr.io/$PROJECT_ID/cloud-builders/puppet-discovery-pusher"
+    id: push-demo
+    waitFor: ['build-pusher', 'tag-demo']
+    args:
+      - 'demo'
+
   # staging
   - name: "gcr.io/$PROJECT_ID/cloud-builders/puppet-discovery-public"
     id: promote-public-staging
     waitFor: ['build-tagger', 'build-public']
     args:
       - 'staging'
-      - $PROJECT_ID
       - 'puppet-dig'
+      - 'puppet-discovery'
 
   - name: "gcr.io/$PROJECT_ID/cloud-builders/puppet-discovery-tagger"
     id: tag-staging
     waitFor: ['build-tagger', 'build-public', 'promote-public-staging']
     args:
       - 'staging'
-      - $PROJECT_ID
+      - 'puppet-discovery'
+
+  - name: "gcr.io/$PROJECT_ID/cloud-builders/puppet-discovery-pusher"
+    id: push-staging
+    waitFor: ['build-pusher', 'tag-staging']
+    args:
+      - 'staging'
 
   # preview
   - name: "gcr.io/$PROJECT_ID/cloud-builders/puppet-discovery-tagger"
@@ -42,4 +74,10 @@ steps:
     waitFor: ['build-tagger']
     args:
       - 'preview'
-      - $PROJECT_ID
+      - 'puppet-discovery'
+
+  - name: "gcr.io/$PROJECT_ID/cloud-builders/puppet-discovery-pusher"
+    id: push-preview
+    waitFor: ['build-pusher', 'tag-preview']
+    args:
+      - 'preview'
