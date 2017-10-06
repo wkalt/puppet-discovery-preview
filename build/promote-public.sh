@@ -32,7 +32,7 @@ docker tag $_source_repo/pdp-ingest:$_new_version $_destination_repo/pdp-ingest:
 docker tag $_source_repo/pdp-query:$_new_version $_destination_repo/pdp-query:$_new_version
 docker tag $_source_repo/static-ui:$_new_version $_destination_repo/static-ui:$_new_version
 
-# push relesae to public
+# push release to public
 
 docker push $_destination_repo/cloud-discovery-controller:$_new_version
 docker push $_destination_repo/cloud-discovery-agent:$_new_version
