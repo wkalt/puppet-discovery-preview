@@ -3,8 +3,7 @@ RELEASE_CHANNEL=$1
 PROJECT_ID=$2
 SOURCE_ID=$3
 
-_release_source="releases/$RELEASE_CHANNEL/release.json"
-_new_version=$(cat $_release_source | jq -r '.resources[] | select(.resource == "operator") | .version')
+source /release-helper.sh "$@"
 
 # pull release from puppet-dig
 _source_repo="gcr.io/$SOURCE_ID"
