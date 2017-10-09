@@ -12,3 +12,5 @@
 2. Run ```.\puppet-discovery.ps1 install```
 3. Open the ui with ```.\puppet-discovery.ps1 open```
 4. For a full list of available commands, run ```.\puppet-discovery.ps1 help```
+
+By using this software, you agree to the End User License Agreement found at the URL https://puppet.app.box.com/v/puppet-discovery-eula
