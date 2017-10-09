@@ -147,6 +147,15 @@ function ensure-virtualbox() {
     fi
 }
 
+function ensure-eula() {
+    echo "By using this software, you agree to the End User License Agreement"
+    echo "found at the URL https://puppet.app.box.com/v/puppet-discovery-eula"
+    echo ""
+    if [[ -z ${RUN_FULL_DEPLOY} ]]; then
+      read -r -p "Press [Enter] key to start installation..."
+    fi
+}
+
 function remove-install-directory() {
     local _install_path=
     _install_path="$(install-path)"
@@ -486,6 +495,9 @@ function cmd-install() {
 
     welcome
 
+    ensure-eula
+
+    echo ""
     echo "Installing Puppet Discovery..."
 
     ensure-install-directory
