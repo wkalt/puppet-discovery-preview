@@ -422,16 +422,27 @@ function getting-started() {
 }
 
 function cmd-deploy() {
+    local _analytics_args=
+    local _unique_system_id=
+    _unique_system_id="$(unique-system-id)"
+
     echo "Deploying Puppet Discovery..."
     echo "Depending on your system resources, this may take a couple of minutes."
-    echo
+    echo ""
+
+    if [ -z "${DISABLE_ANALYTICS+x}" ]; then
+        _analytics_args="--unique-id=${_unique_system_id}"
+    else
+        _analytics_args="--disable-analytics=true"
+    fi
 
     if [ -n "$(type -t deploy-operator)" ] && [ "$(type -t deploy-operator)" = function ]; then
       deploy-operator
     else
       kubectl-cmd run \
                   operator \
-                  --image=gcr.io/puppet-discovery/puppet-discovery-operator:latest
+                  --image=gcr.io/puppet-discovery/puppet-discovery-operator:latest -- \
+                  $_analytics_args
     fi
 
     printf "Waiting for Puppet Discovery to finish starting..."
@@ -454,16 +465,16 @@ function cmd-version() {
 }
 
 function welcome() {
-    echo '======================================================================================='
-    echo '|                                  _         _ _                                      |'
-    echo '|                                 | |       | (_)                                     |'
-    echo '|     _ __  _   _ _ __  _ __   ___| |_    __| |_ ___  ___ _____   _____ _ __ _   _    |'
-    echo '|    |  _ \| | | |  _ \|  _ \ / _ \ __|  / _` | / __|/ __/ _ \ \ / / _ \  __| | | |   |'
-    echo '|    | |_) | |_| | |_) | |_) |  __/ |_  | (_| | \__ \ (_| (_) \ V /  __/ |  | |_| |   |'
-    echo '|    | .__/ \__,_| .__/| .__/ \___|\__|  \__,_|_|___/\___\___/ \_/ \___|_|   \__, |   |'
-    echo '|    | |         | |   | |                                                    __/ |   |'
-    echo '|    |_|         |_|   |_|                                                   |___/    |'
-    echo '======================================================================================='
+    echo '================================================================================='
+    echo '                               _         _ _                                    '
+    echo '                              | |       | (_)                                   '
+    echo '  _ __  _   _ _ __  _ __   ___| |_    __| |_ ___  ___ _____   _____ _ __ _   _  '
+    echo ' |  _ \| | | |  _ \|  _ \ / _ \ __|  / _` | / __|/ __/ _ \ \ / / _ \  __| | | | '
+    echo ' | |_) | |_| | |_) | |_) |  __/ |_  | (_| | \__ \ (_| (_) \ V /  __/ |  | |_| | '
+    echo ' | .__/ \__,_| .__/| .__/ \___|\__|  \__,_|_|___/\___\___/ \_/ \___|_|   \__, | '
+    echo ' | |         | |   | |                                                    __/ | '
+    echo ' |_|         |_|   |_|                                                   |___/  '
+    echo '================================================================================='
     echo ""
     echo ""
     echo "Thank you for downloading Puppet Discovery Tech Preview."
