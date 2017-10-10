@@ -76,7 +76,7 @@
 
     This command will open Puppet Discovery in your default browser.
     You must have installed Puppet Discovery for this to work.
-    
+
     NOTE: If you do not have a browser window already open prior to running this command, your prompt _may_
     hang until you close the browser window.
 
@@ -266,8 +266,8 @@ Process {
       Write-Host "Thank you for downloading Puppet Discovery Tech Preview."
       Write-Host ""
       Write-Host ""
-      Write-Host "By using this software, you agree to the End User License Agreement"
-      Write-Host "Found at the URL https://puppet.app.box.com/v/puppet-discovery-eula"
+      Write-Host "By installing this software, you agree to the End User License Agreement"
+      Write-Host "found at https://puppet.app.box.com/v/puppet-discovery-eula"
       Write-Host ""
       Read-Host -Prompt "Press [Enter] key to start installation"
 
@@ -364,7 +364,7 @@ Process {
     }
     "Mayday" {
       Write-Host 'puppet-discovery mayday'
-      New-PuppetDiscoveryLogArchive     
+      New-PuppetDiscoveryLogArchive
     }
   }
 }

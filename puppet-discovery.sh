@@ -148,8 +148,8 @@ function ensure-virtualbox() {
 }
 
 function ensure-eula() {
-    echo "By using this software, you agree to the End User License Agreement"
-    echo "found at the URL https://puppet.app.box.com/v/puppet-discovery-eula"
+    echo "By installing this software, you agree to the End User License Agreement"
+    echo "found at https://puppet.app.box.com/v/puppet-discovery-eula"
     echo ""
     if [[ -z ${RUN_FULL_DEPLOY} ]]; then
       read -r -p "Press [Enter] key to start installation..."
