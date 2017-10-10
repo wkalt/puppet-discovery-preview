@@ -82,6 +82,7 @@ function minikube-logs() {
     _pod=$1
 
     KUBECONFIG="${_install_path}/${KUBECONFIG_FILE}" \
+    PATH=${_install_path}:${PATH} \
     "${_install_path}"/kubetail \
                       --context puppet-discovery-minikube \
                       "${_pod}"
